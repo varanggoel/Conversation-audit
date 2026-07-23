@@ -1,100 +1,68 @@
-import streamlit as st
-import pandas as pd
 import json
 
-from parser import parse_chat
-from analyzer import analyze
+import pandas as pd
+import streamlit as st
 
-st.set_page_config(
-    page_title="Edoofa Auditor",
-    layout="wide"
-)
+from analyzer import analyze, compare_chats
+from parser import parse_chat
+
+st.set_page_config(page_title="Edoofa Auditor", layout="wide")
 
 st.title("🎓 Edoofa Conversation Audit Tool")
 
 st.markdown(
-"""
-Upload one or more exported WhatsApp chats.
-The system analyzes communication quality using the Edoofa Audit Framework.
-"""
+    """
+    Upload one or more exported WhatsApp chats and receive a structured audit report.
+    The analysis uses an Edoofa-specific framework covering professionalism, empathy,
+    responsiveness, trust, and other quality signals across the full conversation.
+    """
 )
 
-files = st.file_uploader(
-    "Upload Chats",
-    type=["txt"],
-    accept_multiple_files=True
+st.info(
+    "Audit Framework: Professionalism, Responsiveness, Information Accuracy, Broken Promises, Transparency, Empathy, Sales Pressure, Personalization, Trust Building, Concern Resolution, Follow-up Quality, Tone Changes, Ethical Counseling, Compliance Risks, and Conversation Flow."
 )
+
+files = st.file_uploader("Upload Chats", type=["txt"], accept_multiple_files=True)
 
 if files:
-
     if st.button("Run Audit"):
-
         reports = []
 
         for file in files:
-
             text = file.read().decode("utf-8")
-
             messages = parse_chat(text)
-
             report = analyze(messages)
-
             reports.append(report)
 
-        for report in reports:
+        if len(reports) > 1:
+            aggregate = compare_chats(reports)
+            st.subheader("Cross-Conversation Patterns")
+            st.json(aggregate)
 
-            data = json.loads(report)
-
+        for index, report in enumerate(reports, start=1):
             st.divider()
+            st.header(f"Conversation {index} Summary")
 
-            st.header("Conversation Summary")
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Overall Score", f"{report['overall_score']}/100")
+            c2.metric("Risk", report["risk"])
+            c3.metric("Findings", len(report["findings"]))
+            critical = len([f for f in report["findings"] if f["severity"] == "Critical"])
+            c4.metric("Critical", critical)
 
-            c1,c2,c3,c4 = st.columns(4)
-
-            c1.metric(
-                "Overall Score",
-                f"{data['overall_score']}/100"
+            st.subheader("Audit Framework")
+            framework_df = pd.DataFrame(
+                [{"Category": item["name"], "Measure": item["measure"], "Why it matters": item["why"]} for item in report["framework"]]
             )
-
-            c2.metric(
-                "Risk",
-                data["risk"]
-            )
-
-            c3.metric(
-                "Findings",
-                len(data["findings"])
-            )
-
-            critical = len([
-                f for f in data["findings"]
-                if f["severity"]=="Critical"
-            ])
-
-            c4.metric(
-                "Critical",
-                critical
-            )
+            st.dataframe(framework_df, use_container_width=True, hide_index=True)
 
             st.subheader("Category Scores")
-
-            scores = pd.DataFrame(
-                data["category_scores"].items(),
-                columns=["Category","Score"]
-            )
-
-            st.bar_chart(
-                scores.set_index("Category")
-            )
+            scores = pd.DataFrame(report["category_scores"].items(), columns=["Category", "Score"])
+            st.bar_chart(scores.set_index("Category"))
 
             st.subheader("Findings")
-
-            for finding in data["findings"]:
-
-                with st.expander(
-                    f"{finding['severity']} • {finding['category']}"
-                ):
-
+            for finding in report["findings"]:
+                with st.expander(f"{finding['severity']} • {finding['category']}"):
                     st.write("**Summary**")
                     st.write(finding["summary"])
 
@@ -108,11 +76,9 @@ if files:
                     st.success(finding["recommendation"])
 
             st.subheader("Counselor Strengths")
-
-            for s in data["strengths"]:
-                st.success(s)
+            for strength in report["strengths"]:
+                st.success(strength)
 
             st.subheader("Coaching Priorities")
-
-            for s in data["coaching_priorities"]:
-                st.warning(s)
+            for priority in report["coaching_priorities"]:
+                st.warning(priority)

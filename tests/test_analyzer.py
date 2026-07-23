@@ -2,7 +2,7 @@ import json
 
 import pytest
 
-from analyzer import build_analysis_prompt, parse_json_response
+from analyzer import analyze, build_analysis_prompt, parse_json_response
 
 
 class DummyModel:
@@ -46,3 +46,21 @@ def test_parse_json_response_invalid_json():
 
     assert "error" in parsed
     assert parsed["raw_response"] == "not json"
+
+
+def test_analyze_returns_framework_report(sample_messages):
+    report = analyze(sample_messages)
+
+    assert "overall_score" in report
+    assert "risk" in report
+    assert "findings" in report
+    assert "category_scores" in report
+    assert "framework" in report
+    assert report["framework"][0]["name"] == "Professionalism"
+
+
+def test_analyze_exposes_tunable_scoring_parameters(sample_messages):
+    report = analyze(sample_messages)
+
+    assert "parameters" in report
+    assert report["parameters"]["responsiveness"]["question_penalty"] == 12
